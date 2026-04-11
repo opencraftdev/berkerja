@@ -54,8 +54,9 @@ export async function* runPuppeteerScraper(
 ): AsyncGenerator<ScraperProgress, void, unknown> {
   const maxPages = options.maxPages ?? 3;
   const runnerPath = path.join(process.cwd(), 'scripts', 'scraper', 'puppeteer-runner.ts');
+  const tsxPath = path.join(process.cwd(), 'node_modules', '.bin', 'tsx');
 
-  const child = spawn('node', [runnerPath, '--keyword', options.keyword, '--platform', options.platform, '--max-pages', String(maxPages)], {
+  const child = spawn(tsxPath, [runnerPath, '--keyword', options.keyword, '--platform', options.platform, '--max-pages', String(maxPages)], {
     env: { ...process.env },
   });
 
@@ -85,9 +86,11 @@ export async function* runPuppeteerScraper(
   }
 
   return new Promise((resolve, reject) => {
+    let stderrOutput = '';
+    child.stderr?.on('data', (data) => { stderrOutput += data.toString(); });
     child.on('close', (code) => {
       if (code === 0) resolve();
-      else reject(new Error(`Scraper exited with code ${code}`));
+      else reject(new Error(`Scraper exited with code ${code}${stderrOutput ? ': ' + stderrOutput : ''}`));
     });
     child.on('error', reject);
   });
