@@ -3,10 +3,12 @@ set -euo pipefail
 
 keyword="${KEYWORD:-frontend engineer}"
 
+title=$(echo "$keyword" | sed 's/\b\(.\)/\U\1/g')
+
 cat <<EOF
 [
   {
-    "title": "${keyword^}",
+    "title": "${title}",
     "company": "Glints Sample Co",
     "location": "Jakarta, Indonesia",
     "url": "https://glints.com/id/opportunities/jobs/sample-role",
