@@ -8,6 +8,7 @@ export async function scrapeJobs(userId: string, keyword: string, platform: JobP
       'x-user-id': userId,
     },
     body: JSON.stringify({ userId, keyword, platform }),
+    credentials: 'include',
   });
 
   if (!response.ok) {

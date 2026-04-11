@@ -25,25 +25,32 @@ export async function POST(request: NextRequest) {
 
     const userId = await getRequestUserId(request, explicitUserId);
     const scriptPath = path.join(process.cwd(), 'scripts', scriptMap[platform as JobPlatform]);
+    console.log('[Scrape] Running scraper for keyword:', keyword, 'platform:', platform);
+
     const result = await runScraperScript(scriptPath, { KEYWORD: keyword });
+    console.log('[Scrape] Script result:', result.success ? 'success' : 'failed', result.output.slice(0, 200), result.error);
 
     if (!result.success) {
       throw new Error(result.error ?? 'Scraper failed.');
     }
 
     const jobs = parseJobsFromOutput(result.output);
+    console.log('[Scrape] Parsed jobs:', jobs.length);
     const supabase = createAdminClient() ?? (await createClient());
     await ensureProfile(supabase, userId);
     const { data, error } = await supabase
       .from('jobs')
       .insert(
         jobs.map((job) => ({
-          ...job,
           user_id: userId,
-          keyword_query: keyword,
           platform,
-          status: 'new',
-          scraped_at: new Date().toISOString(),
+          title: job.title,
+          company: job.company ?? null,
+          location: job.location ?? null,
+          url: job.url,
+          salary_range: job.salary_range ?? null,
+          description: job.description ?? null,
+          status: 'saved',
         })),
       )
       .select('*');
@@ -54,6 +61,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ jobs: data ?? [], count: data?.length ?? 0 });
   } catch (error) {
+    console.error('[Scrape Error]', error);
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Scraping failed.' },
       { status: 500 },
