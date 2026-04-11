@@ -2,18 +2,13 @@ import path from 'node:path';
 
 import { NextRequest, NextResponse } from 'next/server';
 
-import { parseJobsFromOutput } from '@/lib/scraper/parser';
 import { getRequestUserId } from '@/lib/request-user';
-import { runScraperScript } from '@/lib/scraper/runner';
 import { ensureProfile } from '@/lib/supabase/profiles';
 import { createAdminClient, createClient } from '@/lib/supabase/server';
+import { runPuppeteerScraper, type ScraperProgress } from '@/lib/scraper/puppeteer-wrapper';
 import type { JobPlatform } from '@/types/job';
 
-const scriptMap: Record<JobPlatform, string> = {
-  glints: 'glints-scraper.sh',
-  linkedin: 'linkedin-scraper.sh',
-  jobstreet: 'jobstreet-scraper.sh',
-};
+const VALID_PLATFORMS: JobPlatform[] = ['glints', 'linkedin', 'jobstreet'];
 
 export async function POST(request: NextRequest) {
   try {
@@ -23,43 +18,77 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Missing keyword or platform.' }, { status: 400 });
     }
 
-    const userId = await getRequestUserId(request, explicitUserId);
-    const scriptPath = path.join(process.cwd(), 'scripts', scriptMap[platform as JobPlatform]);
-    console.log('[Scrape] Running scraper for keyword:', keyword, 'platform:', platform);
-
-    const result = await runScraperScript(scriptPath, { KEYWORD: keyword });
-    console.log('[Scrape] Script result:', result.success ? 'success' : 'failed', result.output.slice(0, 200), result.error);
-
-    if (!result.success) {
-      throw new Error(result.error ?? 'Scraper failed.');
+    if (!VALID_PLATFORMS.includes(platform)) {
+      return NextResponse.json({ error: 'Invalid platform.' }, { status: 400 });
     }
 
-    const jobs = parseJobsFromOutput(result.output);
-    console.log('[Scrape] Parsed jobs:', jobs.length);
+    const userId = await getRequestUserId(request, explicitUserId);
     const supabase = createAdminClient() ?? (await createClient());
     await ensureProfile(supabase, userId);
+
+    const accept = request.headers.get('Accept');
+    if (accept === 'text/event-stream') {
+      const encoder = new TextEncoder();
+      const stream = new ReadableStream({
+        async start(controller) {
+          try {
+            for await (const event of runPuppeteerScraper({ keyword, platform, maxPages: 3 })) {
+              if (event.type === 'progress' || event.type === 'done' || event.type === 'error') {
+                const data = `event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`;
+                controller.enqueue(encoder.encode(data));
+              }
+            }
+            controller.close();
+          } catch (err) {
+            const errorEvent = `event: error\ndata: ${JSON.stringify({ error: err instanceof Error ? err.message : 'Scraping failed' })}\n\n`;
+            controller.enqueue(encoder.encode(errorEvent));
+            controller.close();
+          }
+        },
+      });
+
+      return new Response(stream, {
+        headers: {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+          'Connection': 'keep-alive',
+        },
+      });
+    }
+
+    let allJobs: unknown[] = [];
+    let selectorUpdated = false;
+
+    for await (const event of runPuppeteerScraper({ keyword, platform, maxPages: 3 })) {
+      if (event.type === 'done') {
+        allJobs = event.jobsDone ?? [];
+        selectorUpdated = event.selectorUpdated ?? false;
+      }
+    }
+
     const { data, error } = await supabase
       .from('jobs')
       .insert(
-        jobs.map((job) => ({
-          user_id: userId,
-          platform,
-          title: job.title,
-          company: job.company ?? null,
-          location: job.location ?? null,
-          url: job.url,
-          salary_range: job.salary_range ?? null,
-          description: job.description ?? null,
-          status: 'saved',
-        })),
+        allJobs.map((job: unknown) => {
+          const j = job as Record<string, unknown>;
+          return {
+            user_id: userId,
+            platform,
+            title: j.title,
+            company: j.company ?? null,
+            location: j.location ?? null,
+            url: j.url,
+            salary_range: j.salary_range ?? null,
+            description: j.description ?? null,
+            status: 'saved',
+          };
+        }),
       )
       .select('*');
 
-    if (error) {
-      throw error;
-    }
+    if (error) throw error;
 
-    return NextResponse.json({ jobs: data ?? [], count: data?.length ?? 0 });
+    return NextResponse.json({ jobs: data ?? [], count: data?.length ?? 0, selectorUpdated });
   } catch (error) {
     console.error('[Scrape Error]', error);
     return NextResponse.json(
