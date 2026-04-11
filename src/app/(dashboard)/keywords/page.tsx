@@ -9,12 +9,12 @@ import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { getUserCVs } from '@/features/cv-management/api/upload';
 import { getKeywords, updateKeywords } from '@/features/keyword-generation/api/generate';
 import { scrapeJobs } from '@/features/job-scraping/api/scrape';
-import { useUserContextStore } from '@/stores/user-context';
+import { useAuthStore } from '@/stores/auth-store';
 import type { CV } from '@/types/cv';
 import type { KeywordRecord } from '@/types/keyword';
 
 export default function KeywordsPage() {
-  const { userId, hydrate } = useUserContextStore();
+  const { user, hydrate } = useAuthStore();
   const [cvs, setCvs] = useState<CV[]>([]);
   const [keywords, setKeywords] = useState<KeywordRecord[]>([]);
   const [isSaving, setIsSaving] = useState(false);
@@ -28,29 +28,29 @@ export default function KeywordsPage() {
   }, [hydrate]);
 
   useEffect(() => {
-    if (!userId) {
+    if (!user?.id) {
       return;
     }
 
-    Promise.all([getUserCVs(userId), getKeywords(userId)])
+    Promise.all([getUserCVs(user?.id), getKeywords(user?.id)])
       .then(([cvData, keywordData]) => {
         setCvs(cvData);
         setKeywords(keywordData);
       })
       .catch((value: Error) => setError(value.message));
-  }, [userId]);
+  }, [user?.id]);
 
   const selectedCvId = useMemo(() => currentKeywordRecord?.cv_id ?? latestCv?.id ?? '', [currentKeywordRecord, latestCv]);
 
   async function handleSave() {
-    if (!currentKeywordRecord || !userId) {
+    if (!currentKeywordRecord || !user?.id) {
       return;
     }
 
     setIsSaving(true);
 
     try {
-      const updated = await updateKeywords(currentKeywordRecord.id, currentKeywordRecord.queries, userId);
+      const updated = await updateKeywords(currentKeywordRecord.id, currentKeywordRecord.queries, user?.id);
       setKeywords([updated]);
     } catch (value) {
       setError(value instanceof Error ? value.message : 'Failed to save keywords.');
@@ -60,14 +60,14 @@ export default function KeywordsPage() {
   }
 
   async function handleScrape() {
-    if (!currentKeywordRecord || !userId || currentKeywordRecord.queries.length === 0) {
+    if (!currentKeywordRecord || !user?.id || currentKeywordRecord.queries.length === 0) {
       return;
     }
 
     setIsScraping(true);
 
     try {
-      await scrapeJobs(userId, currentKeywordRecord.queries[0], 'glints');
+      await scrapeJobs(user?.id, currentKeywordRecord.queries[0], 'glints');
     } catch (value) {
       setError(value instanceof Error ? value.message : 'Failed to start scraping.');
     } finally {
@@ -90,9 +90,9 @@ export default function KeywordsPage() {
       <div className="flex flex-wrap gap-3">
         <KeywordGenerateButton
           cvId={selectedCvId}
-          userId={userId}
+          userId={user?.id ?? ''}
           onGenerated={async (result) => {
-            const refreshed = await getKeywords(userId);
+            const refreshed = await getKeywords(user?.id ?? '');
 
             if (refreshed.length > 0) {
               setKeywords(refreshed);
@@ -103,7 +103,7 @@ export default function KeywordsPage() {
               setKeywords([
                 {
                   id: `local-${selectedCvId}`,
-                  user_id: userId,
+                  user_id: user?.id ?? '',
                   cv_id: selectedCvId,
                   queries: result.keywords,
                   generation_notes: result.reasoning,
