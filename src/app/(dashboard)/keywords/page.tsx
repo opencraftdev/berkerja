@@ -5,10 +5,11 @@ import { useEffect, useMemo, useState } from 'react';
 import { KeywordAnalysisNotes } from '@/components/keywords/keyword-analysis-notes';
 import { KeywordEditor } from '@/components/keywords/keyword-editor';
 import { KeywordGenerateButton } from '@/components/keywords/keyword-generate-button';
+import { ScraperProgress } from '@/components/scraper/scraper-progress';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { getUserCVs } from '@/features/cv-management/api/upload';
 import { getKeywords, updateKeywords } from '@/features/keyword-generation/api/generate';
-import { scrapeJobs } from '@/features/job-scraping/api/scrape';
+import { useScraperSSE } from '@/hooks/use-scraper-sse';
 import { useAuthStore } from '@/stores/auth-store';
 import type { CV } from '@/types/cv';
 import type { KeywordRecord } from '@/types/keyword';
@@ -19,10 +20,18 @@ export default function KeywordsPage() {
   const [cvs, setCvs] = useState<CV[]>([]);
   const [keywords, setKeywords] = useState<KeywordRecord[]>([]);
   const [isSaving, setIsSaving] = useState(false);
-  const [isScraping, setIsScraping] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const latestCv = cvs[0] ?? null;
   const currentKeywordRecord = keywords[0] ?? null;
+
+  const { status, progress, startScraping } = useScraperSSE({
+    onDone: () => {
+      setError(null);
+    },
+    onError: (err) => {
+      setError(err);
+    },
+  });
 
   useEffect(() => {
     hydrate();
@@ -60,20 +69,13 @@ export default function KeywordsPage() {
     }
   }
 
-  async function handleScrape() {
+  function handleScrape() {
     if (!currentKeywordRecord || !userId || currentKeywordRecord.queries.length === 0) {
       return;
     }
 
-    setIsScraping(true);
-
-    try {
-      await scrapeJobs(userId, currentKeywordRecord.queries[0], 'glints');
-    } catch (value) {
-      setError(value instanceof Error ? value.message : 'Failed to start scraping.');
-    } finally {
-      setIsScraping(false);
-    }
+    setError(null);
+    startScraping(currentKeywordRecord.queries[0], 'glints');
   }
 
   return (
@@ -137,10 +139,15 @@ export default function KeywordsPage() {
               type="button"
               className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
               onClick={handleScrape}
-              disabled={isScraping || !currentKeywordRecord}
+              disabled={status === 'scraping' || !currentKeywordRecord}
             >
-              {isScraping ? 'Starting scraper...' : 'Start scraping'}
+              {status === 'scraping' ? 'Starting scraper...' : 'Start scraping'}
             </button>
+            <ScraperProgress
+              status={status}
+              progress={progress}
+              onRetry={handleScrape}
+            />
           </CardContent>
         </Card>
         <KeywordAnalysisNotes notes={currentKeywordRecord?.generation_notes ?? null} />
