@@ -1,44 +1,35 @@
 'use client';
 
-import { useState } from 'react';
 import { Sparkles } from 'lucide-react';
+import { useState } from 'react';
+
 import { Button } from '@/components/ui/button';
+import { analyzeCV } from '@/features/cv-management/api/analyze';
+import type { KeywordResult } from '@/lib/deepagents/cv-agent';
 
 interface KeywordGenerateButtonProps {
   cvId: string;
-  onGenerated: (result: { keywords: string[]; reasoning: string }) => void;
+  userId: string;
+  onGenerated: (result: KeywordResult) => void;
 }
 
-export function KeywordGenerateButton({ cvId, onGenerated }: KeywordGenerateButtonProps) {
+export function KeywordGenerateButton({ cvId, userId, onGenerated }: KeywordGenerateButtonProps) {
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleGenerate = async () => {
+  async function handleGenerate() {
     setIsLoading(true);
+
     try {
-      const response = await fetch('/api/cv/analyze', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cvId }),
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Analysis failed');
-      }
-
-      const result = await response.json();
-      onGenerated(result);
-    } catch (error) {
-      console.error('Analysis failed:', error);
+      onGenerated(await analyzeCV(cvId, userId));
     } finally {
       setIsLoading(false);
     }
-  };
+  }
 
   return (
-    <Button onClick={handleGenerate} disabled={isLoading}>
+    <Button type="button" onClick={handleGenerate} disabled={!cvId || !userId || isLoading}>
       <Sparkles className="mr-2 h-4 w-4" />
-      {isLoading ? 'Analyzing CV...' : 'Generate Keywords'}
+      {isLoading ? 'Analyzing CV...' : 'Generate keywords'}
     </Button>
   );
 }

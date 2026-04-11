@@ -7,9 +7,9 @@ cat <<EOF
 [
   {
     "title": "${keyword^}",
-    "company": "Glints Sample Co",
-    "location": "Jakarta, Indonesia",
-    "url": "https://glints.com/id/opportunities/jobs/sample-role",
+    "company": "JobStreet Sample Co",
+    "location": "Remote",
+    "url": "https://www.jobstreet.com/id/job/sample-role",
     "description_snippet": "Replay script placeholder for ${keyword}",
     "full_description": "Recorded scraper placeholder output until agent-browser recording is added."
   }

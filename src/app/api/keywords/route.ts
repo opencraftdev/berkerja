@@ -1,92 +1,58 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getKeywords, updateKeywords } from '@/features/keyword-generation/api/generate';
-import { createClient } from '@/lib/supabase/server';
+
+import { getRequestUserId } from '@/lib/request-user';
+import { createAdminClient, createClient } from '@/lib/supabase/server';
 
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
+    const userId = await getRequestUserId(request);
+    const supabase = createAdminClient() ?? (await createClient());
+    const { data, error } = await supabase
+      .from('keywords')
+      .select('*')
+      .eq('user_id', userId)
+      .order('updated_at', { ascending: false });
 
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    if (error) {
+      throw error;
     }
 
-    const keywords = await getKeywords(user.id);
-    return NextResponse.json(keywords);
+    return NextResponse.json(data ?? []);
   } catch (error) {
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Failed to fetch keywords' },
-      { status: 500 }
+      { error: error instanceof Error ? error.message : 'Failed to fetch keywords.' },
+      { status: 500 },
     );
   }
 }
 
 export async function PATCH(request: NextRequest) {
   try {
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
     const { keywordId, queries } = await request.json();
+    const userId = await getRequestUserId(request);
 
-    if (!keywordId || !queries) {
-      return NextResponse.json(
-        { error: 'Missing keywordId or queries' },
-        { status: 400 }
-      );
+    if (!keywordId || !Array.isArray(queries)) {
+      return NextResponse.json({ error: 'Missing keywordId or queries.' }, { status: 400 });
     }
 
-    const { data: existing } = await supabase
+    const supabase = createAdminClient() ?? (await createClient());
+    const { data, error } = await supabase
       .from('keywords')
-      .select('id')
+      .update({ queries, updated_at: new Date().toISOString() })
       .eq('id', keywordId)
-      .eq('user_id', user.id)
+      .eq('user_id', userId)
+      .select('*')
       .single();
 
-    if (!existing) {
-      return NextResponse.json({ error: 'Keyword not found' }, { status: 404 });
+    if (error) {
+      throw error;
     }
 
-    const keyword = await updateKeywords(keywordId, queries);
-    return NextResponse.json(keyword);
+    return NextResponse.json(data);
   } catch (error) {
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Update failed' },
-      { status: 500 }
-    );
-  }
-}
-
-export async function DELETE(request: NextRequest) {
-  try {
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const { keywordId } = await request.json();
-
-    if (!keywordId) {
-      return NextResponse.json({ error: 'Missing keywordId' }, { status: 400 });
-    }
-
-    const { error } = await supabase
-      .from('keywords')
-      .delete()
-      .eq('id', keywordId)
-      .eq('user_id', user.id);
-
-    if (error) throw error;
-    return NextResponse.json({ success: true });
-  } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Delete failed' },
-      { status: 500 }
+      { error: error instanceof Error ? error.message : 'Failed to update keywords.' },
+      { status: 500 },
     );
   }
 }

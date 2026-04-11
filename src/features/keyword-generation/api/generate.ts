@@ -1,38 +1,36 @@
-import { createClient } from '@/lib/supabase/client';
-import { Keyword } from '../types/keyword';
+import type { KeywordRecord } from '@/types/keyword';
 
-export async function getKeywords(userId: string): Promise<Keyword[]> {
-  const supabase = createClient();
-  
-  const { data, error } = await supabase
-    .from('keywords')
-    .select('*')
-    .eq('user_id', userId)
-    .order('created_at', { ascending: false });
+export async function getKeywords(userId: string): Promise<KeywordRecord[]> {
+  const response = await fetch('/api/keywords', {
+    headers: {
+      'x-user-id': userId,
+    },
+  });
 
-  if (error) throw error;
-  return data || [];
+  if (!response.ok) {
+    throw new Error((await response.json()).error ?? 'Failed to fetch keywords');
+  }
+
+  return response.json();
 }
 
 export async function updateKeywords(
   keywordId: string,
-  queries: string[]
-): Promise<Keyword> {
-  const supabase = createClient();
-  
-  const { data, error } = await supabase
-    .from('keywords')
-    .update({ queries, updated_at: new Date().toISOString() })
-    .eq('id', keywordId)
-    .select()
-    .single();
+  queries: string[],
+  userId: string,
+): Promise<KeywordRecord> {
+  const response = await fetch('/api/keywords', {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-user-id': userId,
+    },
+    body: JSON.stringify({ keywordId, queries }),
+  });
 
-  if (error) throw error;
-  return data;
-}
+  if (!response.ok) {
+    throw new Error((await response.json()).error ?? 'Failed to update keywords');
+  }
 
-export async function deleteKeywords(keywordId: string): Promise<void> {
-  const supabase = createClient();
-  const { error } = await supabase.from('keywords').delete().eq('id', keywordId);
-  if (error) throw error;
+  return response.json();
 }

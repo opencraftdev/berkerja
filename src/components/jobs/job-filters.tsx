@@ -1,12 +1,6 @@
 'use client';
 
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { Select } from '@/components/ui/select';
 
 interface JobFiltersProps {
   platform: string;
@@ -15,37 +9,21 @@ interface JobFiltersProps {
   onStatusChange: (value: string) => void;
 }
 
-export function JobFilters({
-  platform,
-  status,
-  onPlatformChange,
-  onStatusChange,
-}: JobFiltersProps) {
+export function JobFilters({ platform, status, onPlatformChange, onStatusChange }: JobFiltersProps) {
   return (
-    <div className="flex gap-4">
-      <Select value={platform} onValueChange={onPlatformChange}>
-        <SelectTrigger className="w-[150px]">
-          <SelectValue placeholder="Platform" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="all">All Platforms</SelectItem>
-          <SelectItem value="glints">Glints</SelectItem>
-          <SelectItem value="linkedin">LinkedIn</SelectItem>
-          <SelectItem value="jobstreet">JobStreet</SelectItem>
-        </SelectContent>
+    <div className="flex flex-col gap-3 md:flex-row">
+      <Select value={platform} onChange={(event) => onPlatformChange(event.target.value)}>
+        <option value="all">All platforms</option>
+        <option value="glints">Glints</option>
+        <option value="linkedin">LinkedIn</option>
+        <option value="jobstreet">JobStreet</option>
       </Select>
-
-      <Select value={status} onValueChange={onStatusChange}>
-        <SelectTrigger className="w-[150px]">
-          <SelectValue placeholder="Status" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="all">All Status</SelectItem>
-          <SelectItem value="new">New</SelectItem>
-          <SelectItem value="clicked">Clicked</SelectItem>
-          <SelectItem value="pending">Pending</SelectItem>
-          <SelectItem value="applied">Applied</SelectItem>
-        </SelectContent>
+      <Select value={status} onChange={(event) => onStatusChange(event.target.value)}>
+        <option value="all">All statuses</option>
+        <option value="new">New</option>
+        <option value="clicked">Clicked</option>
+        <option value="pending">Pending</option>
+        <option value="applied">Applied</option>
       </Select>
     </div>
   );

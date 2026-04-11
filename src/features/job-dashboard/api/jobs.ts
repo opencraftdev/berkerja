@@ -1,51 +1,49 @@
-import { createClient } from '@/lib/supabase/client';
-import { Job, JobStatus } from '@/features/job-scraping/types/job';
+import type { Job, JobStatus } from '@/types/job';
 
 export async function getJobs(
   userId: string,
-  filters?: {
-    platform?: string;
-    status?: string;
-  }
+  filters?: { platform?: string; status?: string },
 ): Promise<Job[]> {
-  const supabase = createClient();
-  
-  let query = supabase
-    .from('jobs')
-    .select('*')
-    .eq('user_id', userId)
-    .order('created_at', { ascending: false })
-    .limit(50);
+  const params = new URLSearchParams();
 
   if (filters?.platform && filters.platform !== 'all') {
-    query = query.eq('platform', filters.platform);
+    params.set('platform', filters.platform);
   }
 
   if (filters?.status && filters.status !== 'all') {
-    query = query.eq('status', filters.status);
+    params.set('status', filters.status);
   }
 
-  const { data, error } = await query;
+  const response = await fetch(`/api/jobs?${params.toString()}`, {
+    headers: {
+      'x-user-id': userId,
+    },
+  });
 
-  if (error) throw error;
-  return data || [];
+  if (!response.ok) {
+    throw new Error((await response.json()).error ?? 'Failed to fetch jobs');
+  }
+
+  return response.json();
 }
 
 export async function updateJobStatus(
   jobId: string,
   status: JobStatus,
-  userId: string
+  userId: string,
 ): Promise<Job> {
-  const supabase = createClient();
-  
-  const { data, error } = await supabase
-    .from('jobs')
-    .update({ status })
-    .eq('id', jobId)
-    .eq('user_id', userId)
-    .select()
-    .single();
+  const response = await fetch(`/api/jobs/${jobId}`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-user-id': userId,
+    },
+    body: JSON.stringify({ status }),
+  });
 
-  if (error) throw error;
-  return data;
+  if (!response.ok) {
+    throw new Error((await response.json()).error ?? 'Failed to update job');
+  }
+
+  return response.json();
 }
