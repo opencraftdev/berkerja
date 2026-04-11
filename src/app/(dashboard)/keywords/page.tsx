@@ -9,12 +9,13 @@ import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { getUserCVs } from '@/features/cv-management/api/upload';
 import { getKeywords, updateKeywords } from '@/features/keyword-generation/api/generate';
 import { scrapeJobs } from '@/features/job-scraping/api/scrape';
-import { useUserContextStore } from '@/stores/user-context';
+import { useAuthStore } from '@/stores/auth-store';
 import type { CV } from '@/types/cv';
 import type { KeywordRecord } from '@/types/keyword';
 
 export default function KeywordsPage() {
-  const { userId, hydrate } = useUserContextStore();
+  const { user, hydrate } = useAuthStore();
+  const userId = user?.id ?? '';
   const [cvs, setCvs] = useState<CV[]>([]);
   const [keywords, setKeywords] = useState<KeywordRecord[]>([]);
   const [isSaving, setIsSaving] = useState(false);

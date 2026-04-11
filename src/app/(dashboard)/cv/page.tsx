@@ -7,11 +7,12 @@ import { CvUploadDropzone } from '@/components/cv/upload-dropzone';
 import { CvViewer } from '@/components/cv/cv-viewer';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { getUserCVs, uploadCV } from '@/features/cv-management/api/upload';
-import { useUserContextStore } from '@/stores/user-context';
+import { useAuthStore } from '@/stores/auth-store';
 import type { CV } from '@/types/cv';
 
 export default function CvPage() {
-  const { userId, hydrate } = useUserContextStore();
+  const { user, hydrate } = useAuthStore();
+  const userId = user?.id;
   const [cvs, setCvs] = useState<CV[]>([]);
   const [selectedCv, setSelectedCv] = useState<CV | null>(null);
   const [isUploading, setIsUploading] = useState(false);

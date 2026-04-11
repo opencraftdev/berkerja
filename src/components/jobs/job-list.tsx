@@ -5,11 +5,12 @@ import { useEffect, useState } from 'react';
 import { JobCard } from '@/components/jobs/job-card';
 import { JobFilters } from '@/components/jobs/job-filters';
 import { getJobs, updateJobStatus } from '@/features/job-dashboard/api/jobs';
-import { useUserContextStore } from '@/stores/user-context';
+import { useAuthStore } from '@/stores/auth-store';
 import type { Job, JobStatus } from '@/types/job';
 
 export function JobList() {
-  const { userId, hydrate } = useUserContextStore();
+  const { user, hydrate } = useAuthStore();
+  const userId = user?.id ?? '';
   const [jobs, setJobs] = useState<Job[]>([]);
   const [platform, setPlatform] = useState('all');
   const [status, setStatus] = useState('all');
