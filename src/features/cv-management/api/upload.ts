@@ -8,6 +8,7 @@ export async function uploadCV(file: File, userId: string): Promise<CV> {
   const response = await fetch('/api/cv/upload', {
     method: 'POST',
     body: formData,
+    credentials: 'include',
   });
 
   if (!response.ok) {

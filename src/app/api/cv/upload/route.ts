@@ -33,6 +33,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(data);
   } catch (error) {
+    console.error('[CV Upload Error]', error);
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Upload failed.' },
       { status: 500 },
