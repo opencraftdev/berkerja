@@ -1,4 +1,7 @@
 #!/bin/bash
+# DEPRECATED: This is a placeholder script.
+# Real scraping is now done via Puppeteer in scripts/scraper/puppeteer-runner.ts
+# This file is kept for backwards compatibility reference.
 set -euo pipefail
 
 keyword="${KEYWORD:-frontend engineer}"
