@@ -56,6 +56,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(result);
   } catch (error) {
+    console.error('[CV Analyze Error]', error);
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Analysis failed.' },
       { status: 500 },

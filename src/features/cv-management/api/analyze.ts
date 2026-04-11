@@ -8,6 +8,7 @@ export async function analyzeCV(cvId: string, userId: string): Promise<KeywordRe
       'x-user-id': userId,
     },
     body: JSON.stringify({ cvId, userId }),
+    credentials: 'include',
   });
 
   if (!response.ok) {
