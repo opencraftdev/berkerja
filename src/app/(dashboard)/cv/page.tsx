@@ -12,6 +12,7 @@ import type { CV } from '@/types/cv';
 
 export default function CvPage() {
   const { user, hydrate } = useAuthStore();
+  const userId = user?.id ?? '';
   const [cvs, setCvs] = useState<CV[]>([]);
   const [selectedCv, setSelectedCv] = useState<CV | null>(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -22,20 +23,20 @@ export default function CvPage() {
   }, [hydrate]);
 
   useEffect(() => {
-    if (!user?.id) {
+    if (!userId) {
       return;
     }
 
-    getUserCVs(user?.id)
+    getUserCVs(userId)
       .then((data) => {
         setCvs(data);
         setSelectedCv((current) => current ?? data[0] ?? null);
       })
       .catch((value: Error) => setError(value.message));
-  }, [user?.id]);
+  }, [userId]);
 
   async function handleUpload(file: File) {
-    if (!user?.id) {
+    if (!userId) {
       setError('Set a user id in the header before uploading a CV.');
       return;
     }
@@ -44,7 +45,7 @@ export default function CvPage() {
     setError(null);
 
     try {
-      const cv = await uploadCV(file, user?.id);
+      const cv = await uploadCV(file, userId);
       setCvs((current) => [cv, ...current]);
       setSelectedCv(cv);
     } catch (value) {

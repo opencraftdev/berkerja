@@ -10,7 +10,7 @@ import type { Job, JobStatus } from '@/types/job';
 
 export function JobList() {
   const { user, hydrate } = useAuthStore();
-  const userId = user?.id;
+  const userId = user?.id ?? '';
   const [jobs, setJobs] = useState<Job[]>([]);
   const [platform, setPlatform] = useState('all');
   const [status, setStatus] = useState('all');

@@ -2,11 +2,11 @@
 
 import { useEffect } from 'react';
 
-import { Input } from '@/components/ui/input';
+import { UserBadge } from '@/components/auth/UserBadge';
 import { useAuthStore } from '@/stores/auth-store';
 
 export function Header() {
-  const { user, setUser, hydrate } = useAuthStore();
+  const { user, hydrate } = useAuthStore();
 
   useEffect(() => {
     hydrate();
@@ -18,15 +18,15 @@ export function Header() {
         <div>
           <h2 className="text-lg font-semibold text-slate-950">Dashboard</h2>
           <p className="text-sm text-slate-500">
-            Use Supabase auth or set a user id here for local testing.
+            Automated job aggregation powered by AI
           </p>
         </div>
-        <div className="w-full lg:w-[360px]">
-          <Input
-            value={user?.id || ''}
-            onChange={(event) => setUser({ id: event.target.value } as any)}
-            placeholder="Paste your Supabase user UUID"
-          />
+        <div>
+          {user ? (
+            <UserBadge user={user} />
+          ) : (
+            <div className="h-8 w-8 rounded-full bg-slate-200" />
+          )}
         </div>
       </div>
     </header>
