@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
       .from('jobs')
       .select('*')
       .eq('user_id', userId)
-      .order('scraped_at', { ascending: false });
+      .order('created_at', { ascending: false });
 
     if (platform) {
       query = query.eq('platform', platform);
