@@ -2,11 +2,11 @@
 
 import { useEffect } from 'react';
 
-import { Input } from '@/components/ui/input';
-import { useUserContextStore } from '@/stores/user-context';
+import { UserBadge } from '@/components/auth/UserBadge';
+import { useAuthStore } from '@/stores/auth-store';
 
 export function Header() {
-  const { userId, hydrate, setUserId } = useUserContextStore();
+  const { user, hydrate } = useAuthStore();
 
   useEffect(() => {
     hydrate();
@@ -21,12 +21,12 @@ export function Header() {
             Use Supabase auth or set a user id here for local testing.
           </p>
         </div>
-        <div className="w-full lg:w-[360px]">
-          <Input
-            value={userId}
-            onChange={(event) => setUserId(event.target.value)}
-            placeholder="Paste your Supabase user UUID"
-          />
+        <div>
+          {user ? (
+            <UserBadge user={user} />
+          ) : (
+            <div className="h-8 w-8 rounded-full bg-slate-200" />
+          )}
         </div>
       </div>
     </header>
