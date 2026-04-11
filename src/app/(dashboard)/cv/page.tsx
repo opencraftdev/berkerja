@@ -7,11 +7,11 @@ import { CvUploadDropzone } from '@/components/cv/upload-dropzone';
 import { CvViewer } from '@/components/cv/cv-viewer';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { getUserCVs, uploadCV } from '@/features/cv-management/api/upload';
-import { useUserContextStore } from '@/stores/user-context';
+import { useAuthStore } from '@/stores/auth-store';
 import type { CV } from '@/types/cv';
 
 export default function CvPage() {
-  const { userId, hydrate } = useUserContextStore();
+  const { user, hydrate } = useAuthStore();
   const [cvs, setCvs] = useState<CV[]>([]);
   const [selectedCv, setSelectedCv] = useState<CV | null>(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -22,20 +22,20 @@ export default function CvPage() {
   }, [hydrate]);
 
   useEffect(() => {
-    if (!userId) {
+    if (!user?.id) {
       return;
     }
 
-    getUserCVs(userId)
+    getUserCVs(user?.id)
       .then((data) => {
         setCvs(data);
         setSelectedCv((current) => current ?? data[0] ?? null);
       })
       .catch((value: Error) => setError(value.message));
-  }, [userId]);
+  }, [user?.id]);
 
   async function handleUpload(file: File) {
-    if (!userId) {
+    if (!user?.id) {
       setError('Set a user id in the header before uploading a CV.');
       return;
     }
@@ -44,7 +44,7 @@ export default function CvPage() {
     setError(null);
 
     try {
-      const cv = await uploadCV(file, userId);
+      const cv = await uploadCV(file, user?.id);
       setCvs((current) => [cv, ...current]);
       setSelectedCv(cv);
     } catch (value) {
