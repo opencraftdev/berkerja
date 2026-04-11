@@ -3,10 +3,10 @@
 import { useEffect } from 'react';
 
 import { Input } from '@/components/ui/input';
-import { useUserContextStore } from '@/stores/user-context';
+import { useAuthStore } from '@/stores/auth-store';
 
 export function Header() {
-  const { userId, hydrate, setUserId } = useUserContextStore();
+  const { user, setUser, hydrate } = useAuthStore();
 
   useEffect(() => {
     hydrate();
@@ -23,8 +23,8 @@ export function Header() {
         </div>
         <div className="w-full lg:w-[360px]">
           <Input
-            value={userId}
-            onChange={(event) => setUserId(event.target.value)}
+            value={user?.id || ''}
+            onChange={(event) => setUser({ id: event.target.value } as any)}
             placeholder="Paste your Supabase user UUID"
           />
         </div>
