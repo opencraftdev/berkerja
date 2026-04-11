@@ -13,9 +13,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Missing cvId.' }, { status: 400 });
     }
 
+    console.log('[CV Analyze] Starting analysis for cvId:', cvId);
+    
     const userId = await getRequestUserId(request, explicitUserId);
+    console.log('[CV Analyze] userId:', userId);
+    
     const supabase = createAdminClient() ?? (await createClient());
     await ensureProfile(supabase, userId);
+    
     const { data: cv, error: cvError } = await supabase
       .from('cvs')
       .select('*')
@@ -24,10 +29,13 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (cvError || !cv) {
+      console.log('[CV Analyze] CV not found or error:', cvError);
       throw cvError ?? new Error('CV not found.');
     }
 
+    console.log('[CV Analyze] Calling generateKeywords with raw_text length:', cv.raw_text?.length);
     const result = await generateKeywords(cv.raw_text);
+    console.log('[CV Analyze] generateKeywords result:', JSON.stringify(result).slice(0, 200));
 
     const { error: updateCvError } = await supabase
       .from('cvs')
