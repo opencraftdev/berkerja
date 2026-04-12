@@ -1,9 +1,0 @@
-{
-  "glints": {
-    "jobList": "div.job-card",
-    "title": "h2.job-title",
-    "company": "div.company-name",
-    "location": "div.job-location",
-    "url": "div.job-card > a@href"
-  }
-}
