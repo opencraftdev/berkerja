@@ -19,11 +19,11 @@ export const platformSelectors: Record<PlatformName, PlatformSelector> = {
     searchParam: 'query',
     pagination: 'load-more',
     selectors: {
-      jobList: 'a.job-card',
-      title: '.job-title',
-      company: '.company-name',
-      location: '.location',
-      url: 'a.job-card@href',
+      jobList: 'article[aria-label^="Job:"]',
+      title: '@aria:job',
+      company: '@aria:job',
+      location: '@aria:job',
+      url: 'a[href*="/id/opportunities/"]@href',
     },
   },
   jobstreet: {

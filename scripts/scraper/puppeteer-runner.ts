@@ -17,6 +17,31 @@ function log(type: string, data: Record<string, unknown>) {
   console.error(JSON.stringify({ type, ...data }));
 }
 
+function parseAriaLabel(label: string): { title: string; company: string; location: string } | null {
+  // Format: "Job: {title}, Company: {company}, Location: {location}"
+  const match = label.match(/Job:\s*(.+?),\s*Company:\s*(.+?),\s*Location:\s*(.+)/i);
+  if (match) {
+    return { title: match[1].trim(), company: match[2].trim(), location: match[3].trim() };
+  }
+  return null;
+}
+
+function getAttributeValue(el: puppeteer.ElementHandle | null, selector: string): string | null {
+  if (!el) return null;
+  if (selector.startsWith('@')) {
+    return el.evaluate((e, attr) => e.getAttribute(attr) ?? '', selector.slice(1));
+  }
+  return el.evaluate((e, s) => {
+    const found = e.querySelector(s);
+    if (!found) return null;
+    if (s.startsWith('@')) {
+      const attr = s.slice(1);
+      return (found as HTMLElement).getAttribute(attr) ?? '';
+    }
+    return found.textContent?.trim() ?? '';
+  }, selector);
+}
+
 async function scrapePlatform(
   platform: PlatformName,
   keyword: string,
@@ -41,7 +66,7 @@ async function scrapePlatform(
 
     try {
       await page.goto(searchUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
-      await new Promise(resolve => setTimeout(resolve, 3000)); // Wait for JS to render
+      await new Promise(resolve => setTimeout(resolve, 5000)); // Wait for JS to render
     } catch (err) {
       log('warning', { message: `Page load: ${err}` });
     }
@@ -69,39 +94,13 @@ async function scrapePlatform(
             log('info', { message: 'Selectors updated, retrying with new selectors' });
 
             const updatedConfig = loadSelectors(platform);
-            const retryElements = await page.$$(updatedConfig.selectors.jobList);
-
-            for (const jobEl of retryElements) {
-              const title = await jobEl.$(updatedConfig.selectors.title).then(el => el?.evaluate(e => e.textContent?.trim() ?? '') ?? null);
-              const company = await jobEl.$(updatedConfig.selectors.company).then(el => el?.evaluate(e => e.textContent?.trim() ?? '') ?? null);
-              const location = await jobEl.$(updatedConfig.selectors.location).then(el => el?.evaluate(e => e.textContent?.trim() ?? '') ?? null);
-              const url = await jobEl.$(updatedConfig.selectors.url).then(el => el?.evaluate(e => (e as HTMLAnchorElement).getAttribute('href') ?? '') ?? null);
-
-              if (title && url) {
-                allJobs.push({ title, company, location, url, description: null });
-              }
-            }
+            allJobs.push(...await extractJobs(page, updatedConfig, currentPage, maxPages));
           } catch (err) {
             log('error', { message: `Selector re-extraction failed: ${err}` });
           }
         }
       } else {
-        for (const jobEl of jobElements) {
-          try {
-            const [title, company, location, url] = await Promise.all([
-              jobEl.$(config.selectors.title).then(el => el?.evaluate(e => e.textContent?.trim() ?? '') ?? null),
-              jobEl.$(config.selectors.company).then(el => el?.evaluate(e => e.textContent?.trim() ?? '') ?? null),
-              jobEl.$(config.selectors.location).then(el => el?.evaluate(e => e.textContent?.trim() ?? '') ?? null),
-              jobEl.$(config.selectors.url).then(el => el?.evaluate(e => (e as HTMLAnchorElement).getAttribute('href') ?? '') ?? null),
-            ]);
-
-            if (title && url) {
-              allJobs.push({ title, company, location, url, description: null });
-            }
-          } catch {
-            // Skip individual job extraction errors
-          }
-        }
+        allJobs.push(...await extractJobs(page, config, currentPage, maxPages));
       }
 
       if (currentPage >= maxPages) break;
@@ -111,16 +110,15 @@ async function scrapePlatform(
       if (hasMore) {
         try {
           await page.click('button');
-          await new Promise(resolve => setTimeout(resolve, 2000));
+          await new Promise(resolve => setTimeout(resolve, 3000));
         } catch {
           break;
         }
       } else if (config.pagination === 'page-number') {
-        const nextPage = currentPage + 1;
-        const nextUrl = `${searchUrl}&page=${nextPage}`;
+        const nextUrl = `${searchUrl}&page=${currentPage + 1}`;
         try {
           await page.goto(nextUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
-          await new Promise(resolve => setTimeout(resolve, 2000));
+          await new Promise(resolve => setTimeout(resolve, 3000));
         } catch {
           break;
         }
@@ -137,6 +135,94 @@ async function scrapePlatform(
       await browser.close();
     }
   }
+}
+
+async function extractJobs(
+  page: puppeteer.Page,
+  config: PlatformSelector,
+  pageNum: number,
+  total: number
+): Promise<Job[]> {
+  const jobs: Job[] = [];
+
+  // Check if using aria-label parsing (Glints style)
+  if (config.selectors.title === '@aria:job') {
+    // Extract from aria-label: "Job: {title}, Company: {company}, Location: {location}"
+    const extracted = await page.$$eval(config.selectors.jobList, (els) => {
+      return els.map(el => {
+        const ariaLabel = el.getAttribute('aria-label') || '';
+        const parsed = ariaLabel.match(/Job:\s*(.+?),\s*Company:\s*(.+?),\s*Location:\s*(.+)/i);
+        const titleAnchor = el.querySelector('a[href*="/id/opportunities/"]');
+        const url = titleAnchor?.getAttribute('href') || '';
+        if (parsed) {
+          return {
+            title: parsed[1].trim(),
+            company: parsed[2].trim(),
+            location: parsed[3].trim(),
+            url,
+          };
+        }
+        return null;
+      }).filter(Boolean);
+    });
+
+    for (const job of extracted) {
+      if (job && job.url) {
+        jobs.push({ ...job, description: null });
+      }
+    }
+  } else {
+    // Standard CSS selector extraction
+    const jobElements = await page.$$(config.selectors.jobList);
+
+    for (const jobEl of jobElements) {
+      try {
+        const titleSel = config.selectors.title;
+        const companySel = config.selectors.company;
+        const locationSel = config.selectors.location;
+        const urlSel = config.selectors.url;
+
+        let title: string | null = null;
+        let company: string | null = null;
+        let location: string | null = null;
+        let url: string | null = null;
+
+        if (titleSel.startsWith('@aria:')) {
+          const attr = titleSel.replace('@aria:', '');
+          const ariaLabel = await jobEl.evaluate(el => el.getAttribute(attr) || '');
+          const parsed = ariaLabel.match(/Job:\s*(.+?),\s*Company:\s*(.+?),\s*Location:\s*(.+)/i);
+          if (parsed) {
+            title = parsed[1].trim();
+            company = parsed[2].trim();
+            location = parsed[3].trim();
+          }
+        } else {
+          title = await jobEl.$(titleSel).then(el => el?.evaluate(e => e.textContent?.trim() ?? '') ?? null;
+          company = await jobEl.$(companySel).then(el => el?.evaluate(e => e.textContent?.trim() ?? '') ?? null;
+          location = await jobEl.$(locationSel).then(el => el?.evaluate(e => e.textContent?.trim() ?? '') ?? null);
+        }
+
+        if (urlSel.startsWith('@')) {
+          url = await jobEl.evaluate((el, attr) => {
+            const anchor = el.querySelector(`[href*="/id/opportunities/"]`) as HTMLAnchorElement | null;
+            return anchor?.getAttribute(attr) ?? '';
+          }, urlSel.slice(1)) as string | null;
+        } else {
+          url = await jobEl.$(urlSel).then(el => el?.evaluate((e: Element) => (e as HTMLAnchorElement).getAttribute('href') ?? '') ?? null);
+        }
+
+if (title && url) {
+        const fullUrl = url.startsWith('http') ? url : `https://glints.com${url}`;
+        jobs.push({ title, company, location, url: fullUrl, description: null });
+        }
+      } catch {
+        // Skip individual job extraction errors
+      }
+    }
+  }
+
+  log('progress', { page: pageNum, total, jobs: jobs.length });
+  return jobs;
 }
 
 async function main() {
