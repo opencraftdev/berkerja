@@ -36,13 +36,18 @@ class OpenCodeLLM:
         self._ensure_session()
 
     def _ensure_session(self) -> None:
-        response = httpx.post(f"{self.server_url}/session", json={})
-        if response.status_code == 200:
-            self._session_id = response.json().get("session_id")
-            if not self._session_id:
-                raise RuntimeError("No session_id in response")
-        else:
-            raise RuntimeError(f"Failed to create session: {response.status_code}")
+        if self._session_id is not None:
+            return
+        with httpx.Client(timeout=self.timeout) as client:
+            response = client.post(f"{self.server_url}/session", json={})
+        if response.status_code != 200:
+            raise RuntimeError(
+                f"Failed to create OpenCode session: {response.status_code} {response.text}"
+            )
+        data = response.json()
+        self._session_id = data.get("session_id") or data.get("id")
+        if not self._session_id:
+            raise RuntimeError(f"No session_id in response: {data}")
 
     async def ainvoke(
         self,
@@ -58,11 +63,21 @@ class OpenCodeLLM:
 
         formatted_body = "\n\n".join(formatted_parts)
 
-        response = await self._client.post(
-            f"{self.server_url}/session/{self._session_id}/message",
-            json={"content": formatted_body},
-        )
-        response.raise_for_status()
+        try:
+            response = await self._client.post(
+                f"{self.server_url}/session/{self._session_id}/message",
+                json={"content": formatted_body},
+            )
+            response.raise_for_status()
+        except httpx.HTTPError as e:
+            return ChatInvokeCompletion(
+                completion=AgentOutput(
+                    thinking=f"HTTP error: {e}",
+                    action=[{"DoneAction": {"text": str(e), "success": False}}],
+                ),
+                thinking=None,
+                usage=ChatInvokeUsage(tokens_in=0, tokens_out=0, cost_usd=0.0),
+            )
         text = response.text
 
         agent_output = self._parse_response(text)
@@ -134,8 +149,4 @@ class OpenCodeLLM:
                 self._session_id = None
 
     def __del__(self) -> None:
-        if self._session_id is not None:
-            try:
-                httpx.post(f"{self.server_url}/session/{self._session_id}/delete")
-            except Exception:
-                pass
+        pass  # Rely on aclose() for cleanup; sync I/O in destructor is unsafe
