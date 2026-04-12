@@ -27,17 +27,9 @@ export async function* runBrowserUseScraper(
   const runnerPath = path.join(process.cwd(), 'scripts', 'scraper', 'browser-use-runner.ts');
 
   const child = spawn(
-    'node',
-    [
-      runnerPath,
-      '--keyword',
-      options.keyword,
-      '--platform',
-      options.platform,
-      '--max-pages',
-      String(maxPages),
-    ],
-    { env: { ...process.env } }
+    'npx',
+    ['tsx', runnerPath, '--keyword', options.keyword, '--platform', options.platform, '--max-pages', String(maxPages)],
+    { env: { ...process.env }, shell: true }
   );
 
   const stderrEvents: ScraperProgress[] = [];
@@ -69,11 +61,11 @@ export async function* runBrowserUseScraper(
       yield final as ScraperProgress;
     }
   } catch {
-    // Ignore parse errors
+    throw new Error(`Failed to parse scraper output: ${stdoutBuffer.slice(0, 200)}`);
   }
 
   const exitCode = await new Promise<number>((resolve, reject) => {
-    child.on('close', resolve);
+    child.on('close', (code) => resolve(code ?? 1));
     child.on('error', reject);
   });
 
