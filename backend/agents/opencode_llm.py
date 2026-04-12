@@ -69,7 +69,7 @@ class OpenCodeLLM:
 
         return ChatInvokeCompletion(
             completion=agent_output,
-            thinking=None,
+            thinking=agent_output.thinking,
             usage=ChatInvokeUsage(tokens_in=0, tokens_out=0, cost_usd=0.0),
         )
 
@@ -124,7 +124,7 @@ class OpenCodeLLM:
     async def aclose(self) -> None:
         if self._session_id:
             try:
-                await self._client.post(
+                await self._client.delete(
                     f"{self.server_url}/session/{self._session_id}/delete",
                 )
             except Exception:
