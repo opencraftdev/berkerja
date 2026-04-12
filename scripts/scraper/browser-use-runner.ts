@@ -98,15 +98,19 @@ function parseOutput(rawOutput: unknown): BrowserUseOutput {
     } catch {
       const jsonMatch = rawOutput.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
-        return JSON.parse(jsonMatch[0]) as BrowserUseOutput;
+        try {
+          return JSON.parse(jsonMatch[0]) as BrowserUseOutput;
+        } catch {
+          return { jobs: [] };
+        }
       }
-      throw new Error('Could not parse output as JSON');
+      return { jobs: [] };
     }
   }
   if (typeof rawOutput === 'object' && rawOutput !== null) {
     return rawOutput as BrowserUseOutput;
   }
-  throw new Error(`Unexpected output type: ${typeof rawOutput}`);
+  return { jobs: [] };
 }
 
 async function runBrowserUse(
@@ -128,6 +132,25 @@ async function runBrowserUse(
   const result = await (client.run as any)(task, {
     model: 'gemini-3-flash',
     maxCostUsd: 0.5,
+    outputSchema: {
+      type: 'object',
+      properties: {
+        jobs: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              title: { type: 'string' },
+              company: { type: 'string' },
+              location: { type: 'string' },
+              url: { type: 'string' },
+            },
+            required: ['title', 'company', 'url'],
+          },
+        },
+      },
+      required: ['jobs'],
+    },
   });
 
   log('info', { message: `Session completed. Status: ${result.status}` });
