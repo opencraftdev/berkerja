@@ -1,5 +1,9 @@
 #!/usr/bin/env node
 
+// DEPRECATED: This scraper used Puppeteer which was blocked by Glints bot detection.
+// Replaced by browser-use-runner.ts which uses Browser Use cloud browser automation
+// with built-in stealth/CAPTCHA bypass.
+
 import puppeteer from 'puppeteer';
 import stealth from 'puppeteer-extra-plugin-stealth';
 import { loadSelectors, saveUserSelectors } from './selector-loader';

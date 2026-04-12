@@ -5,7 +5,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getRequestUserId } from '@/lib/request-user';
 import { ensureProfile } from '@/lib/supabase/profiles';
 import { createAdminClient, createClient } from '@/lib/supabase/server';
-import { runPuppeteerScraper, type ScraperProgress } from '@/lib/scraper/puppeteer-wrapper';
+import { runBrowserUseScraper, type ScraperProgress } from '@/lib/scraper/browser-use-client';
 import type { JobPlatform } from '@/types/job';
 
 const VALID_PLATFORMS: JobPlatform[] = ['glints', 'linkedin', 'jobstreet'];
@@ -32,7 +32,7 @@ export async function POST(request: NextRequest) {
       const stream = new ReadableStream({
         async start(controller) {
           try {
-            for await (const event of runPuppeteerScraper({ keyword, platform, maxPages: 3 })) {
+            for await (const event of runBrowserUseScraper({ keyword, platform, maxPages: 3 })) {
               if (event.type === 'progress' || event.type === 'done' || event.type === 'error') {
                 const data = `event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`;
                 controller.enqueue(encoder.encode(data));
@@ -57,12 +57,14 @@ export async function POST(request: NextRequest) {
     }
 
     let allJobs: unknown[] = [];
-    let selectorUpdated = false;
+    let validationPassed = false;
+    let retryUsed = false;
 
-    for await (const event of runPuppeteerScraper({ keyword, platform, maxPages: 3 })) {
+    for await (const event of runBrowserUseScraper({ keyword, platform, maxPages: 3 })) {
       if (event.type === 'done') {
         allJobs = event.jobsDone ?? [];
-        selectorUpdated = event.selectorUpdated ?? false;
+        validationPassed = event.validationPassed ?? false;
+        retryUsed = event.retryUsed ?? false;
       }
     }
 
@@ -88,7 +90,7 @@ export async function POST(request: NextRequest) {
 
     if (error) throw error;
 
-    return NextResponse.json({ jobs: data ?? [], count: data?.length ?? 0, selectorUpdated });
+    return NextResponse.json({ jobs: data ?? [], count: data?.length ?? 0, validationPassed, retryUsed });
   } catch (error) {
     console.error('[Scrape Error]', error);
     return NextResponse.json(
