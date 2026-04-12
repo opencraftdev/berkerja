@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import puppeteer from 'puppeteer';
+import stealth from 'puppeteer-extra-plugin-stealth';
 import { loadSelectors, saveUserSelectors } from './selector-loader';
 import { validateJobs, reExtractSelectors } from './ai-validator';
 import type { PlatformName, PlatformSelector } from './selectors/config';
@@ -17,31 +18,6 @@ function log(type: string, data: Record<string, unknown>) {
   console.error(JSON.stringify({ type, ...data }));
 }
 
-function parseAriaLabel(label: string): { title: string; company: string; location: string } | null {
-  // Format: "Job: {title}, Company: {company}, Location: {location}"
-  const match = label.match(/Job:\s*(.+?),\s*Company:\s*(.+?),\s*Location:\s*(.+)/i);
-  if (match) {
-    return { title: match[1].trim(), company: match[2].trim(), location: match[3].trim() };
-  }
-  return null;
-}
-
-function getAttributeValue(el: puppeteer.ElementHandle | null, selector: string): string | null {
-  if (!el) return null;
-  if (selector.startsWith('@')) {
-    return el.evaluate((e, attr) => e.getAttribute(attr) ?? '', selector.slice(1));
-  }
-  return el.evaluate((e, s) => {
-    const found = e.querySelector(s);
-    if (!found) return null;
-    if (s.startsWith('@')) {
-      const attr = s.slice(1);
-      return (found as HTMLElement).getAttribute(attr) ?? '';
-    }
-    return found.textContent?.trim() ?? '';
-  }, selector);
-}
-
 async function scrapePlatform(
   platform: PlatformName,
   keyword: string,
@@ -50,15 +26,30 @@ async function scrapePlatform(
   let browser;
   try {
     log('info', { message: `Launching browser for ${platform}...` });
+
+    // Apply stealth plugin
+    puppeteer.use(stealth());
+
     browser = await puppeteer.launch({
       headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-blink-features=AutomationControlled',
+        '--disable-features=IsolateOrigins,site-per-process',
+      ],
     });
 
     const page = await browser.newPage();
     await page.setUserAgent(
       'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
     );
+
+    // Set Accept-Language to appear more legitimate
+    await page.setExtraHTTPHeaders({
+      'Accept-Language': 'en-US,en;q=0.9',
+    });
 
     const config = loadSelectors(platform);
     const searchUrl = `${config.url}?${config.searchParam}=${encodeURIComponent(keyword)}`;
@@ -197,9 +188,9 @@ async function extractJobs(
             location = parsed[3].trim();
           }
         } else {
-          title = await jobEl.$(titleSel).then(el => el?.evaluate(e => e.textContent?.trim() ?? '') ?? null;
-          company = await jobEl.$(companySel).then(el => el?.evaluate(e => e.textContent?.trim() ?? '') ?? null;
-          location = await jobEl.$(locationSel).then(el => el?.evaluate(e => e.textContent?.trim() ?? '') ?? null);
+          title = await jobEl.$(titleSel).then(el => el ? el.evaluate(e => e.textContent?.trim() ?? '') : null);
+          company = await jobEl.$(companySel).then(el => el ? el.evaluate(e => e.textContent?.trim() ?? '') : null);
+          location = await jobEl.$(locationSel).then(el => el ? el.evaluate(e => e.textContent?.trim() ?? '') : null);
         }
 
         if (urlSel.startsWith('@')) {
@@ -208,7 +199,7 @@ async function extractJobs(
             return anchor?.getAttribute(attr) ?? '';
           }, urlSel.slice(1)) as string | null;
         } else {
-          url = await jobEl.$(urlSel).then(el => el?.evaluate((e: Element) => (e as HTMLAnchorElement).getAttribute('href') ?? '') ?? null);
+          url = await jobEl.$(urlSel).then(el => el ? el.evaluate((e: Element) => (e as HTMLAnchorElement).getAttribute('href') ?? '') : null);
         }
 
 if (title && url) {
